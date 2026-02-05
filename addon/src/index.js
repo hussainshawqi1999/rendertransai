@@ -1,123 +1,19 @@
 import { addonBuilder, serveHTTP } from 'stremio-addon-sdk';
-import manifest from './manifest.json' assert { type: 'json' };
 import axios from 'axios';
+import express from 'express';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// قراءة manifest.json يدوياً
+const manifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'));
 
 const BACKEND_URL = process.env.BACKEND_URL;
 
 const builder = new addonBuilder(manifest);
-
-// صفحة الإعدادات (HTML)
-const configPage = `
-<!DOCTYPE html>
-<html dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>إعدادات الترجمة العربية</title>
-    <style>
-        body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; background: #1a1a1a; color: #fff; }
-        h1 { color: #4CAF50; }
-        .section { background: #2a2a2a; padding: 20px; margin: 20px 0; border-radius: 8px; }
-        label { display: block; margin: 10px 0 5px; }
-        input, select { width: 100%; padding: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
-        button { background: #4CAF50; color: white; padding: 15px 30px; border: none; border-radius: 4px; cursor: pointer; margin-top: 20px; }
-        button:hover { background: #45a049; }
-        .note { color: #aaa; font-size: 0.9em; margin-top: 5px; }
-        .required { color: #ff6b6b; }
-    </style>
-</head>
-<body>
-    <h1>⚙️ إعدادات الترجمة العربية الذكية</h1>
-    
-    <form id="configForm">
-        <div class="section">
-            <h3>🤖 مزود الترجمة الذكية <span class="required">*</span></h3>
-            <label>اختر المزود:</label>
-            <select id="provider" required>
-                <option value="gemini">Google Gemini (مجاني)</option>
-                <option value="openrouter">OpenRouter (يدعم نماذج متعددة)</option>
-            </select>
-            
-            <label>مفتاح API:</label>
-            <input type="password" id="aiKey" placeholder="ألصق مفتاح API هنا" required>
-            <div class="note">احصل على مفتاح من <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a> (مجاني)</div>
-        </div>
-
-        <div class="section">
-            <h3>📚 مصادر الترجمة (اختياري)</h3>
-            
-            <label>OpenSubtitles API Key:</label>
-            <input type="password" id="osKey" placeholder="ترك فارغ = نسخة محدودة">
-            <div class="note">من <a href="https://www.opensubtitles.com" target="_blank">opensubtitles.com</a> - يعطي نتائج أفضل</div>
-            
-            <label>SubDL API Key:</label>
-            <input type="password" id="subdlKey" placeholder="ترك فارغ = تعطيل">
-            <div class="note">من <a href="https://subdl.com" target="_blank">subdl.com</a></div>
-        </div>
-
-        <button type="submit">💾 حفظ الإعدادات</button>
-    </form>
-
-    <script>
-        document.getElementById('configForm').onsubmit = function(e) {
-            e.preventDefault();
-            const config = {
-                provider: document.getElementById('provider').value,
-                aiKey: document.getElementById('aiKey').value,
-                sources: {
-                    opensubtitles: { apiKey: document.getElementById('osKey').value },
-                    subdl: { apiKey: document.getElementById('subdlKey').value }
-                }
-            };
-            
-            // إرسال للأب (Stremio)
-            if (window.parent) {
-                window.parent.postMessage({ type: 'stremio-config', config }, '*');
-            }
-            
-            // أو حفظ في URL للاستخدام المباشر
-            const encoded = btoa(JSON.stringify(config));
-            window.location.href = '/configure/' + encoded + '/manifest.json';
-        };
-    </script>
-</body>
-</html>
-`;
-
-// صفحة الإعدادات
-builder.defineConfigHandler(() => {
-  return {
-    key: 'arabic-subtitles-config',
-    title: 'إعدادات الترجمة العربية',
-    components: [
-      {
-        type: 'text',
-        name: 'مزود الترجمة',
-        key: 'provider',
-        default: 'gemini',
-        options: [
-          { value: 'gemini', label: 'Google Gemini' },
-          { value: 'openrouter', label: 'OpenRouter' }
-        ]
-      },
-      {
-        type: 'password',
-        name: 'مفتاح AI API',
-        key: 'aiKey',
-        required: true
-      },
-      {
-        type: 'password',
-        name: 'OpenSubtitles API (اختياري)',
-        key: 'osKey'
-      },
-      {
-        type: 'password',
-        name: 'SubDL API (اختياري)',
-        key: 'subdlKey'
-      }
-    ]
-  };
-});
 
 function createFingerprint(args) {
   return `${args.type}_${args.id.replace(/:/g, '_')}`;
@@ -126,12 +22,10 @@ function createFingerprint(args) {
 builder.defineSubtitlesHandler(async (args, extra) => {
   console.log('Request:', args.id);
   
-  // جلب الإعدادات من extra.config
   const config = extra?.config || {};
   const fingerprint = createFingerprint(args);
   
   if (!config.aiKey) {
-    console.log('No API key provided');
     return { 
       subtitles: [{
         id: 'error',
@@ -198,20 +92,16 @@ builder.defineSubtitlesHandler(async (args, extra) => {
   return { subtitles: [] };
 });
 
-// مسار إضافي لصفحة الإعدادات
-const express = (await import('express')).default;
 const app = express();
+const addonInterface = builder.getInterface();
 
-app.get('/configure', (req, res) => {
-  res.send(configPage);
+app.get('/health', (req, res) => {
+  res.json({ status: 'addon alive', backend: BACKEND_URL });
 });
 
-// دمج الإضافة مع Express
-const addonInterface = builder.getInterface();
 app.use(addonInterface);
 
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, () => {
   console.log(`Addon on ${PORT}`);
-  console.log(`Config page: http://localhost:${PORT}/configure`);
 });
