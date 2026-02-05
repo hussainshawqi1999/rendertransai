@@ -1,8 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -11,14 +8,14 @@ app.use(express.json({ limit: '50mb' }));
 const cache = new Map();
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'alive', timestamp: Date.now() });
+  res.json({ status: 'alive' });
 });
 
+// الترجمة مع مفاتيح اليوزر
 app.post('/translate', async (req, res) => {
   req.setTimeout(90000);
-  res.setHeader('Content-Type', 'application/json');
   
-  const { videoMetadata, provider } = req.body;
+  const { videoMetadata, provider, sources } = req.body;
   const key = videoMetadata.fingerprint;
 
   if (cache.has(key)) {
@@ -29,34 +26,54 @@ app.post('/translate', async (req, res) => {
     console.log(`Processing: ${videoMetadata.filename}`);
     
     const { OpenSubtitlesSource } = await import('./subtitle-sources/opensubtitles.js');
+    const { SubDLSource } = await import('./subtitle-sources/subdl.js');
     const { SubtitleRanker } = await import('./ranking/algorithm.js');
     const { AITranslator } = await import('./translation/ai-translator.js');
 
-    const sources = [new OpenSubtitlesSource()];
+    // بناء المصادر حسب مفاتيح اليوزر
+    const sourceInstances: any[] = [];
+    
+    if (sources?.opensubtitles?.apiKey) {
+      sourceInstances.push(new OpenSubtitlesSource(sources.opensubtitles.apiKey));
+    }
+    
+    if (sources?.subdl?.apiKey) {
+      sourceInstances.push(new SubDLSource(sources.subdl.apiKey));
+    }
+
+    // إذا مافيه ولا مصدر، نستخدم OpenSubtitles بدون API (محدود)
+    if (sourceInstances.length === 0) {
+      sourceInstances.push(new OpenSubtitlesSource(''));
+    }
+
     let candidates: any[] = [];
     
-    for (const src of sources) {
+    for (const src of sourceInstances) {
       try {
         const found = await src.search(videoMetadata);
         candidates.push(...found);
-      } catch(e) { console.log('Source failed:', e); }
+      } catch(e) { console.log('Source failed:', e.message); }
     }
 
     if (candidates.length === 0) {
-      return res.status(404).json({ error: 'No subtitles found' });
+      return res.status(404).json({ error: 'No subtitles found. Check your API keys.' });
     }
 
     const ranker = new SubtitleRanker();
     const best = ranker.getBestCandidate(candidates, videoMetadata);
     
     if (!best) {
-      return res.status(404).json({ error: 'No suitable subtitle' });
+      return res.status(404).json({ error: 'No suitable subtitle found' });
     }
 
-    const source = sources.find(s => s.constructor.name.toLowerCase().includes(best.source));
+    const source = sourceInstances.find(s => 
+      s.constructor.name.toLowerCase().includes(best.source)
+    );
+    
     const original = await source!.download(best);
 
-    console.log('Translating...');
+    // الترجمة
+    console.log('Translating with:', provider.name);
     const translator = new AITranslator(provider);
     const translated = await translator.translate(original, { title: videoMetadata.filename });
 
@@ -67,7 +84,7 @@ app.post('/translate', async (req, res) => {
     };
     
     cache.set(key, result);
-    setTimeout(() => cache.delete(key), 5 * 60 * 1000);
+    setTimeout(() => cache.delete(key), 10 * 60 * 1000); // 10 دقائق
 
     res.json({ status: 'completed', subtitle: result });
 
@@ -78,4 +95,4 @@ app.post('/translate', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`Server on ${PORT}`));
