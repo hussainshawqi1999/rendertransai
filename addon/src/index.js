@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 const manifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'));
 
-const BACKEND_URL = process.env.BACKEND_URL;
+const BACKEND_URL = process.env.BACKEND_URL || '';
 
 const configPage = `
 <!DOCTYPE html>
