@@ -11,7 +11,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'alive' });
 });
 
-// الترجمة مع مفاتيح اليوزر
 app.post('/translate', async (req, res) => {
   req.setTimeout(90000);
   
@@ -30,7 +29,6 @@ app.post('/translate', async (req, res) => {
     const { SubtitleRanker } = await import('./ranking/algorithm.js');
     const { AITranslator } = await import('./translation/ai-translator.js');
 
-    // بناء المصادر حسب مفاتيح اليوزر
     const sourceInstances: any[] = [];
     
     if (sources?.opensubtitles?.apiKey) {
@@ -41,7 +39,6 @@ app.post('/translate', async (req, res) => {
       sourceInstances.push(new SubDLSource(sources.subdl.apiKey));
     }
 
-    // إذا مافيه ولا مصدر، نستخدم OpenSubtitles بدون API (محدود)
     if (sourceInstances.length === 0) {
       sourceInstances.push(new OpenSubtitlesSource(''));
     }
@@ -52,7 +49,9 @@ app.post('/translate', async (req, res) => {
       try {
         const found = await src.search(videoMetadata);
         candidates.push(...found);
-      } catch(e) { console.log('Source failed:', e.message); }
+      } catch(e: any) {  // ⬅️ هنا التعديل
+        console.log('Source failed:', e.message); 
+      }
     }
 
     if (candidates.length === 0) {
@@ -72,7 +71,6 @@ app.post('/translate', async (req, res) => {
     
     const original = await source!.download(best);
 
-    // الترجمة
     console.log('Translating with:', provider.name);
     const translator = new AITranslator(provider);
     const translated = await translator.translate(original, { title: videoMetadata.filename });
@@ -84,11 +82,11 @@ app.post('/translate', async (req, res) => {
     };
     
     cache.set(key, result);
-    setTimeout(() => cache.delete(key), 10 * 60 * 1000); // 10 دقائق
+    setTimeout(() => cache.delete(key), 10 * 60 * 1000);
 
     res.json({ status: 'completed', subtitle: result });
 
-  } catch (error: any) {
+  } catch (error: any) {  // ⬅️ هنا كمان
     console.error('Error:', error);
     res.status(500).json({ error: 'Processing failed', msg: error.message });
   }
