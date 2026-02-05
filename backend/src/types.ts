@@ -21,3 +21,8 @@ export interface TranslationProvider {
   apiKey: string;
   model?: string;
 }
+
+export interface UserSources {
+  opensubtitles?: { apiKey: string };
+  subdl?: { apiKey: string };
+}
