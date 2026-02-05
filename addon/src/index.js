@@ -85,7 +85,7 @@ const configPage = `
 const builder = new addonBuilder(manifest);
 
 function createFingerprint(args) {
-  return '${args.type}_${args.id.replace(/:/g, '_')}';
+  return args.type + '_' + args.id.replace(/:/g, '_');
 }
 
 builder.defineSubtitlesHandler(async (args, extra) => {
@@ -105,7 +105,7 @@ builder.defineSubtitlesHandler(async (args, extra) => {
   }
 
   try {
-    const response = await axios.post('${BACKEND_URL}/translate', {
+    const response = await axios.post(BACKEND_URL + '/translate', {
       videoMetadata: {
         fingerprint,
         filename: args.extra?.filename || args.id,
@@ -128,7 +128,7 @@ builder.defineSubtitlesHandler(async (args, extra) => {
       
       return {
         subtitles: [{
-          id: 'ar_${fingerprint}',
+          id: 'ar_' + fingerprint,
           lang: 'ara',
           url: 'data:text/srt;base64,' + base64,
           name: '🇦🇪 عربي ذكي (' + config.provider + ')',
