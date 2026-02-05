@@ -1,0 +1,13 @@
+{
+  "id": "org.arabicsubtitles.free",
+  "version": "1.0.0",
+  "name": "Arabic AI Subtitles - By Husain",
+  "description": "ترجمات عربية ذكية - يدعم تفريق الذكر/الأنثى",
+  "logo": "https://i.imgur.com/arabic.png",
+  "background": "https://i.imgur.com/bg.jpg",
+  "contactEmail": "your@email.com",
+  "types": ["movie", "series"],
+  "catalogs": [],
+  "resources": ["subtitles"],
+  "idPrefixes": ["tt"]
+}
