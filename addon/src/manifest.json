@@ -1,13 +1,17 @@
 {
-  "id": "org.arabicsubtitles.free",
+  "id": "org.arabicsubtitles.userconfig",
   "version": "1.0.0",
-  "name": "Arabic AI Subtitles - By Husain",
-  "description": "ترجمات عربية ذكية - يدعم تفريق الذكر/الأنثى",
+  "name": "Arabic AI Subtitles (User Config)",
+  "description": "ترجمات عربية ذكية - أضف مفاتيحك الخاصة",
   "logo": "https://i.imgur.com/arabic.png",
   "background": "https://i.imgur.com/bg.jpg",
   "contactEmail": "your@email.com",
   "types": ["movie", "series"],
   "catalogs": [],
-  "resources": ["subtitles"],
-  "idPrefixes": ["tt"]
+  "resources": ["subtitles", "config"],
+  "idPrefixes": ["tt"],
+  "behaviorHints": {
+    "configurable": true,
+    "configurationRequired": true
+  }
 }
