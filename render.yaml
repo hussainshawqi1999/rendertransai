@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: arabic-subtitles-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENSUBTITLES_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: arabic-subtitles-addon
+    runtime: node
+    plan: free
+    rootDir: addon
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          name: arabic-subtitles-api
+          type: web
+          property: host
+        template: "https://{{.host}}"
+      - key: AI_API_KEY
+        sync: false
+      - key: TRANSLATION_PROVIDER
+        value: gemini
