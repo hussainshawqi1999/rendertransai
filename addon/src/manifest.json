@@ -1,17 +1,13 @@
 {
   "id": "org.arabicsubtitles.userconfig",
   "version": "1.0.0",
-  "name": "Arabic AI Subtitles (User Config)",
+  "name": "Arabic AI Subtitles",
   "description": "ترجمات عربية ذكية - أضف مفاتيحك الخاصة",
   "logo": "https://i.imgur.com/arabic.png",
   "background": "https://i.imgur.com/bg.jpg",
   "contactEmail": "your@email.com",
   "types": ["movie", "series"],
   "catalogs": [],
-  "resources": ["subtitles", "config"],
-  "idPrefixes": ["tt"],
-  "behaviorHints": {
-    "configurable": true,
-    "configurationRequired": true
-  }
+  "resources": ["subtitles"],
+  "idPrefixes": ["tt"]
 }
