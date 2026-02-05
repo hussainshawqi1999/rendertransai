@@ -1,17 +1,11 @@
 import pkg from 'stremio-addon-sdk';
-const { addonBuilder, serveHTTP } = pkg;
+const { addonBuilder } = pkg;
 
+import express from 'express';
 import axios from 'axios';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const BACKEND_URL = process.env.BACKEND_URL || '';
 
-// manifest
 const manifest = {
   id: "org.arabicsubtitles.userconfig",
   version: "1.0.0",
@@ -26,7 +20,6 @@ const manifest = {
   idPrefixes: ["tt"]
 };
 
-// صفحة الإعدادات
 const configPage = `
 <!DOCTYPE html>
 <html dir="rtl">
@@ -94,7 +87,6 @@ const configPage = `
 </html>
 `;
 
-// Builder
 const builder = new addonBuilder(manifest);
 
 function createFingerprint(args) {
@@ -111,7 +103,7 @@ builder.defineSubtitlesHandler(async (args, extra) => {
         id: 'no_config',
         lang: 'ara',
         url: 'data:text/plain;base64,ERROR',
-        name: '⚠️ أكمل الإعدادات أولاً',
+        name: '⚠️ أكمل الإعدادات أولاً /configure',
         ext: 'txt'
       }]
     };
@@ -156,7 +148,7 @@ builder.defineSubtitlesHandler(async (args, extra) => {
         id: 'error',
         lang: 'ara',
         url: 'data:text/plain;base64,ERROR',
-        name: '❌ فشلت الترجمة: ' + (error.message || 'خطأ غير معروف'),
+        name: '❌ فشلت الترجمة',
         ext: 'txt'
       }]
     };
@@ -165,15 +157,15 @@ builder.defineSubtitlesHandler(async (args, extra) => {
   return { subtitles: [] };
 });
 
-// استخدم serveHTTP مع middleware مخصص
-const PORT = process.env.PORT || 7000;
+// Express تطبيق
+const app = express();
 
-const { app } = serveHTTP(builder.getInterface(), { 
-  port: PORT,
-  cache: 3600
+// صفحة الإعدادات
+app.get('/', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.end(configPage);
 });
 
-// إضافة مسارات مخصصة
 app.get('/configure', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(configPage);
@@ -197,4 +189,44 @@ app.get('/stremio/:config/manifest.json', (req, res) => {
   }
 });
 
-console.log('Addon starting on port ' + PORT);
+// الـ addon routes
+const addonInterface = builder.getInterface();
+
+// subtitles route مع config
+app.get('/stremio/:config/subtitles/:type/:id/:extra?.json', async (req, res) => {
+  try {
+    const config = JSON.parse(Buffer.from(req.params.config, 'base64').toString());
+    const args = {
+      type: req.params.type,
+      id: req.params.id,
+      extra: req.query
+    };
+    
+    const result = await builder.runSubtitlesHandler(args, { config });
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ subtitles: [] });
+  }
+});
+
+// default manifest بدون config
+app.get('/manifest.json', (req, res) => {
+  res.json(manifest);
+});
+
+// default subtitles (بدون config)
+app.get('/subtitles/:type/:id/:extra?.json', async (req, res) => {
+  const args = {
+    type: req.params.type,
+    id: req.params.id,
+    extra: req.query
+  };
+  const result = await builder.runSubtitlesHandler(args, {});
+  res.json(result);
+});
+
+const PORT = process.env.PORT || 7000;
+app.listen(PORT, () => {
+  console.log('Addon on port ' + PORT);
+  console.log('Configure: http://localhost:' + PORT + '/configure');
+});
