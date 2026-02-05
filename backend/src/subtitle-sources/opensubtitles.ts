@@ -6,22 +6,28 @@ const API_URL = 'https://api.opensubtitles.com/api/v1';
 export class OpenSubtitlesSource {
   private apiKey: string;
 
-  constructor() {
-    this.apiKey = process.env.OPENSUBTITLES_API_KEY || '';
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
   }
 
   async search(metadata: VideoMetadata): Promise<SubtitleCandidate[]> {
     try {
+      const headers: any = {
+        'User-Agent': 'StremioArabic/1.0'
+      };
+      
+      // إذا فيه API key نستخدمه، إلا نستخدم النسخة المفتوحة (محدودة)
+      if (this.apiKey) {
+        headers['Api-Key'] = this.apiKey;
+      }
+
       const params = new URLSearchParams({
         languages: 'en',
         ...(metadata.filename && { query: metadata.filename.replace(/\.[^/.]+$/, '') })
       });
 
       const response = await axios.get(`${API_URL}/subtitles?${params}`, {
-        headers: {
-          'Api-Key': this.apiKey,
-          'User-Agent': 'StremioArabic/1.0'
-        },
+        headers,
         timeout: 10000
       });
 
@@ -41,11 +47,16 @@ export class OpenSubtitlesSource {
   }
 
   async download(candidate: SubtitleCandidate): Promise<string> {
+    const headers: any = {
+      'User-Agent': 'StremioArabic/1.0'
+    };
+    
+    if (this.apiKey) {
+      headers['Api-Key'] = this.apiKey;
+    }
+
     const response = await axios.get(candidate.downloadUrl, {
-      headers: {
-        'Api-Key': this.apiKey,
-        'User-Agent': 'StremioArabic/1.0'
-      },
+      headers,
       responseType: 'arraybuffer',
       timeout: 15000
     });
