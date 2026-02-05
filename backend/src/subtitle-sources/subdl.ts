@@ -2,16 +2,24 @@ import axios from 'axios';
 import { SubtitleCandidate, VideoMetadata } from '../types.js';
 
 export class SubDLSource {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
   async search(metadata: VideoMetadata): Promise<SubtitleCandidate[]> {
+    if (!this.apiKey) return [];
+
     try {
       const response = await axios.get(`https://api.subdl.com/api/v1/subtitles`, {
         params: {
-          api_key: process.env.SUBDL_API_KEY,
+          api_key: this.apiKey,
           film_name: metadata.filename.replace(/\.[^/.]+$/, ''),
           languages: 'en'
         },
         timeout: 10000
-      }).catch(() => ({ data: null }));
+      });
 
       if (!response.data?.subtitles) return [];
 
