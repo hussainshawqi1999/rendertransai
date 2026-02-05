@@ -1,4 +1,6 @@
-import { addonBuilder, serveHTTP } from 'stremio-addon-sdk';
+import pkg from 'stremio-addon-sdk';
+const { addonBuilder } = pkg;
+
 import axios from 'axios';
 import express from 'express';
 import { readFileSync } from 'fs';
