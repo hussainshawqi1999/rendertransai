@@ -1,8 +1,7 @@
 import pkg from 'stremio-addon-sdk';
-const { addonBuilder } = pkg;
+const { addonBuilder, serveHTTP } = pkg;
 
 import axios from 'axios';
-import http from 'http';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -10,10 +9,24 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const manifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'));
-
 const BACKEND_URL = process.env.BACKEND_URL || '';
 
+// manifest
+const manifest = {
+  id: "org.arabicsubtitles.userconfig",
+  version: "1.0.0",
+  name: "Arabic AI Subtitles",
+  description: "ترجمات عربية ذكية - أضف مفاتيحك الخاصة",
+  logo: "https://i.imgur.com/arabic.png",
+  background: "https://i.imgur.com/bg.jpg",
+  contactEmail: "your@email.com",
+  types: ["movie", "series"],
+  catalogs: [],
+  resources: ["subtitles"],
+  idPrefixes: ["tt"]
+};
+
+// صفحة الإعدادات
 const configPage = `
 <!DOCTYPE html>
 <html dir="rtl">
@@ -24,7 +37,7 @@ const configPage = `
         body { font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px; background: #1a1a2e; color: #fff; }
         h1 { color: #4CAF50; text-align: center; }
         .section { background: rgba(255,255,255,0.05); padding: 25px; margin: 20px 0; border-radius: 12px; }
-        label { display: block; margin: 20px 0 8px; font-weight: 500; }
+        label { display: block; margin: 20px 0 8px; }
         input, select { width: 100%; padding: 14px; background: rgba(0,0,0,0.3); color: #fff; border: 2px solid #333; border-radius: 8px; }
         button { background: #4CAF50; color: white; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; font-size: 18px; width: 100%; }
         .note { color: #888; font-size: 0.85em; margin-top: 8px; }
@@ -45,7 +58,7 @@ const configPage = `
             
             <label>مفتاح API:</label>
             <input type="password" id="aiKey" placeholder="ألصق مفتاح API هنا" required>
-            <div class="note">احصل على مفتاح مجاني من <a href="https://aistudio.google.com" target="_blank" style="color: #4CAF50;">aistudio.google.com</a></div>
+            <div class="note">احصل على مفتاح مجاني من <a href="https://aistudio.google.com" style="color: #4CAF50;">aistudio.google.com</a></div>
         </div>
 
         <div class="section">
@@ -74,7 +87,6 @@ const configPage = `
             
             const encoded = btoa(JSON.stringify(config));
             const manifestUrl = window.location.origin + '/stremio/' + encoded + '/manifest.json';
-            
             window.location.href = 'stremio://' + manifestUrl.replace(/^https?:\/\//, '');
         };
     </script>
@@ -82,6 +94,7 @@ const configPage = `
 </html>
 `;
 
+// Builder
 const builder = new addonBuilder(manifest);
 
 function createFingerprint(args) {
@@ -98,7 +111,7 @@ builder.defineSubtitlesHandler(async (args, extra) => {
         id: 'no_config',
         lang: 'ara',
         url: 'data:text/plain;base64,ERROR',
-        name: '⚠️ أكمل الإعدادات أولاً /configure',
+        name: '⚠️ أكمل الإعدادات أولاً',
         ext: 'txt'
       }]
     };
@@ -143,7 +156,7 @@ builder.defineSubtitlesHandler(async (args, extra) => {
         id: 'error',
         lang: 'ara',
         url: 'data:text/plain;base64,ERROR',
-        name: '❌ فشلت الترجمة',
+        name: '❌ فشلت الترجمة: ' + (error.message || 'خطأ غير معروف'),
         ext: 'txt'
       }]
     };
@@ -152,57 +165,36 @@ builder.defineSubtitlesHandler(async (args, extra) => {
   return { subtitles: [] };
 });
 
+// استخدم serveHTTP مع middleware مخصص
 const PORT = process.env.PORT || 7000;
 
-const server = http.createServer((req, res) => {
-  const url = req.url;
-  
-  if (url === '/' || url === '/configure') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(configPage);
-    return;
-  }
-  
-  const stremioMatch = url.match(/\/stremio\/([^\/]+)\/manifest\.json$/);
-  if (stremioMatch) {
-    try {
-      const config = JSON.parse(Buffer.from(stremioMatch[1], 'base64').toString());
-      const customManifest = {
-        ...manifest,
-        id: 'org.arabicsubtitles.' + Buffer.from(stremioMatch[1]).toString('hex').slice(0,8),
-        name: 'Arabic AI Subtitles (' + config.provider + ')'
-      };
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(customManifest));
-      return;
-    } catch (e) {
-      res.writeHead(400);
-      res.end('Invalid config');
-      return;
-    }
-  }
-  
-  const subMatch = url.match(/\/stremio\/([^\/]+)\/subtitles\//);
-  if (subMatch) {
-    try {
-      const config = JSON.parse(Buffer.from(subMatch[1], 'base64').toString());
-      req.url = url.replace(/\/stremio\/[^\/]+/, '');
-      req.stremioConfig = config;
-      
-      const iface = builder.getInterface();
-      iface(req, res);
-      return;
-    } catch (e) {
-      res.writeHead(400);
-      res.end('Invalid config');
-      return;
-    }
-  }
-  
-  const iface = builder.getInterface();
-  iface(req, res);
+const { app } = serveHTTP(builder.getInterface(), { 
+  port: PORT,
+  cache: 3600
 });
 
-server.listen(PORT, () => {
-  console.log('Addon on port ' + PORT);
+// إضافة مسارات مخصصة
+app.get('/configure', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.end(configPage);
 });
+
+// manifest مع الإعدادات
+app.get('/stremio/:config/manifest.json', (req, res) => {
+  try {
+    const config = JSON.parse(Buffer.from(req.params.config, 'base64').toString());
+    const customManifest = {
+      ...manifest,
+      id: 'org.arabicsubtitles.' + Buffer.from(req.params.config).toString('hex').slice(0,8),
+      name: 'Arabic AI Subtitles (' + config.provider + ')',
+      behaviorHints: {
+        config: config
+      }
+    };
+    res.json(customManifest);
+  } catch (e) {
+    res.status(400).json({ error: 'Invalid config' });
+  }
+});
+
+console.log('Addon starting on port ' + PORT);
